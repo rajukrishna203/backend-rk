@@ -1,28 +1,20 @@
-# Secure base image
-FROM node:20-alpine
+# Vulnerable Dockerfile
+FROM node:12.18.1  # Outdated and vulnerable version
 
-# Create a non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Hardcoded sensitive data
+ENV DATABASE_PASSWORD=SuperSecret123
 
 WORKDIR /app
 
-# Securely copy package files first
-COPY package.json package-lock.json ./
-
-# Install dependencies securely
-RUN npm ci --only=production
-
-# Copy remaining application files
 COPY . .
 
-# Set ownership and file permissions securely
-RUN chown -R appuser:appgroup /app
+# Running as root user (unsafe)
+USER root
 
-# Expose only the required port
-EXPOSE 3000
+# Insecure package installation
+RUN npm install --unsafe-perm
 
-# Use a non-root user
-USER appuser
+# Exposing excessive and unnecessary ports
+EXPOSE 3000 8080 9000
 
-# Secure start command
-CMD ["node", "server.js"]
+CMD ["npm", "start"]
