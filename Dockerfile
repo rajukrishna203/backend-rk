@@ -1,21 +1,30 @@
-# Secure base image
+# Use a secure, up-to-date Node.js version
 FROM node:20-alpine
 
-# Set non-root user
+# Create a non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
 
+# Set working directory
 WORKDIR /app
 
-# Install dependencies securely
+# Securely copy package files first for caching dependencies
 COPY package.json package-lock.json ./
+
+# Install dependencies in a secure way
 RUN npm ci --only=production
 
-# Securely copy application files
-COPY --chown=appuser:appgroup . .
+# Copy remaining application files
+COPY . .
 
-# Expose only required ports
+# Set proper ownership and file permissions
+RUN chown -R appuser:appgroup /app
+
+# Expose only the necessary port
 EXPOSE 3000
 
-# Use a non-root user and secure start command
+# Switch to non-root user
+USER appuser
+
+# Use a secure start command
 CMD ["node", "server.js"]
+
