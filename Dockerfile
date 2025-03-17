@@ -1,37 +1,44 @@
-# **Secure Dockerfile**
-# Using the latest stable and secure Node.js LTS version
-FROM node:20-alpine  # Uses a minimal, up-to-date image to reduce attack surface
+# **Secure & Maintainable Dockerfile**
+# Use a minimal, up-to-date, and secure base image
+FROM node:20-alpine as base
 
-# Set a non-root user to improve security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
-
-# Securely define environment variables (avoid hardcoded secrets)
+# Set environment variables securely
 ARG DATABASE_USER
 ARG DATABASE_PASSWORD
 ARG API_KEY
 ENV DATABASE_USER=${DATABASE_USER}
 ENV DATABASE_PASSWORD=${DATABASE_PASSWORD}
 ENV API_KEY=${API_KEY}
+ENV NODE_ENV=production  # Ensures optimized production settings
 
-# Set working directory with restricted permissions
+# Set a secure working directory with appropriate permissions
 WORKDIR /app
-COPY --chown=appuser:appgroup . .
+COPY package.json package-lock.json ./
 
-# Verify package integrity before installation
-RUN apk add --no-cache curl bash \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && npm install --omit=dev --ignore-scripts
+# Install only necessary dependencies with integrity verification
+RUN npm ci --omit=dev --ignore-scripts \
+    && npm audit signatures \
+    && rm -rf /root/.npm
 
-# Use multi-stage builds to remove build dependencies
-FROM node:20-alpine AS production
+# Multi-stage build to reduce final image size and remove unnecessary dependencies
+FROM node:20-alpine as production
 WORKDIR /app
-COPY --from=0 /app /app
-RUN chown -R appuser:appgroup /app
 
-# Expose only necessary ports
+# Create a non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy application files from the build stage
+COPY --from=base --chown=appuser:appgroup /app /app
+COPY . .
+
+# Secure file permissions and restrict access
+RUN chmod 750 /app && chown -R appuser:appgroup /app
+
+# Expose only the necessary port
 EXPOSE 3000
 
-# Use a non-root user and run the application with limited privileges
+# Use a non-root user to execute the application
 USER appuser
-CMD ["npm", "start"]
+
+# Use a minimal entrypoint script to prevent container privilege escalation
+ENTRYPOINT ["node", "server.js"]
